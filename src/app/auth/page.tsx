@@ -85,7 +85,7 @@ const authService = {
           },
         };
       }
-    } catch (error) {
+    } catch {
       // Network or other errors
       return {
         success: false,
@@ -185,8 +185,8 @@ export default function AuthPage() {
                 Welcome to Fetch Rewards!
               </h2>
               <p className="text-gray-600 text-lg mb-8">
-                You've successfully joined our community and earned 100 welcome
-                points! 🎉
+                You&apos;ve successfully joined our community and earned 100
+                welcome points! 🎉
               </p>
               <div className="inline-flex items-center bg-gradient-to-r from-pink-500 to-orange-400 text-white px-6 py-3 rounded-full text-lg font-semibold mb-6">
                 <Star className="mr-3 h-5 w-5" />
@@ -363,7 +363,7 @@ export default function AuthPage() {
           <Card className="backdrop-blur-sm bg-white/90 border-0 shadow-xl">
             <CardContent className="p-6">
               <h4 className="font-bold text-purple-900 mb-4 text-center text-lg">
-                What you'll get:
+                What you&apos;ll get:
               </h4>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center text-sm text-purple-700">
