@@ -8,11 +8,11 @@ import {
   Calendar,
   Grid,
   List,
-  ChevronDown,
   X,
   Shuffle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 // Type definitions
 interface Dog {
@@ -40,15 +40,6 @@ interface SearchResult {
   prev?: string;
 }
 
-interface Location {
-  zip_code: string;
-  latitude: number;
-  longitude: number;
-  city: string;
-  state: string;
-  county: string;
-}
-
 export default function DogsListingPage() {
   const router = useRouter();
 
@@ -56,14 +47,16 @@ export default function DogsListingPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // State management
+  // Data state
   const [dogs, setDogs] = useState<Dog[]>([]);
-  const [loading, setLoading] = useState(false); // Changed to false initially
+  const [loading, setLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [selectedDogs, setSelectedDogs] = useState<Set<string>>(new Set());
+  const [matchLoading, setMatchLoading] = useState(false);
+
+  // UI state
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
-  const [matchLoading, setMatchLoading] = useState(false);
 
   // Filter state
   const [filters, setFilters] = useState<SearchFilters>({
@@ -75,7 +68,7 @@ export default function DogsListingPage() {
     size: 25,
   });
 
-  // UI state
+  // Breed options
   const [breedOptions] = useState([
     "Labrador Retriever",
     "Golden Retriever",
@@ -89,64 +82,7 @@ export default function DogsListingPage() {
     "Siberian Husky",
   ]);
 
-  // ✅ PROPER AUTH CHECK - Works with HTTPOnly cookies
-  const checkAuthentication = async () => {
-    try {
-      setAuthLoading(true);
-      console.log("🔍 Checking authentication status...");
-
-      // Method 1: Try the dogs search API (this requires auth)
-      const response = await fetch(
-        "https://frontend-take-home-service.fetch.com/dogs/search?size=1",
-        {
-          method: "GET",
-          credentials: "include", // Sends HTTPOnly cookies
-        }
-      );
-
-      if (response.ok) {
-        console.log("✅ User is authenticated");
-        setIsAuthenticated(true);
-        return true;
-      } else if (response.status === 401 || response.status === 403) {
-        console.log("❌ User is not authenticated");
-        setIsAuthenticated(false);
-        return false;
-      } else {
-        console.log("⚠️ Ambiguous auth response, assuming not authenticated");
-        setIsAuthenticated(false);
-        return false;
-      }
-    } catch (error) {
-      console.error("🚨 Auth check failed:", error);
-      setIsAuthenticated(false);
-      return false;
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // ✅ AUTH CHECK ON MOUNT
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const authenticated = await checkAuthentication();
-
-      if (!authenticated) {
-        console.log("🔄 Redirecting to auth page...");
-        const currentPath = window.location.pathname + window.location.search;
-        router.replace(`/auth?returnUrl=${encodeURIComponent(currentPath)}`);
-        return; // Don't continue with data loading
-      }
-
-      // If authenticated, load the dogs data
-      console.log("✅ User authenticated, loading dogs...");
-      fetchDogs();
-    };
-
-    initializeAuth();
-  }, []); // Empty dependency array - only run once on mount
-
-  // Fetch dogs function
+  // ✅ SOLUTION 1: Memoized fetch dogs function
   const fetchDogs = useCallback(
     async (searchFilters?: SearchFilters, from?: string) => {
       // Don't fetch if not authenticated
@@ -188,7 +124,6 @@ export default function DogsListingPage() {
         if (searchResponse.status === 401 || searchResponse.status === 403) {
           console.log("🚨 Auth expired during API call, redirecting...");
           setIsAuthenticated(false);
-          router.replace("/auth");
           return;
         }
 
@@ -223,40 +158,120 @@ export default function DogsListingPage() {
         setLoading(false);
       }
     },
-    [filters, isAuthenticated, router] // Added dependencies
+    [filters, isAuthenticated] // Dependencies for fetchDogs
   );
 
+  // ✅ SOLUTION 1: Auth check useEffect (runs once on mount)
+  useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounts
+
+    const checkAuthentication = async () => {
+      try {
+        setAuthLoading(true);
+        console.log("🔍 Checking authentication status...");
+
+        const response = await fetch(
+          "https://frontend-take-home-service.fetch.com/dogs/search?size=1",
+          {
+            method: "GET",
+            credentials: "include",
+          }
+        );
+
+        if (isMounted) {
+          if (response.ok) {
+            console.log("✅ User is authenticated");
+            setIsAuthenticated(true);
+          } else if (response.status === 401 || response.status === 403) {
+            console.log("❌ User is not authenticated");
+            setIsAuthenticated(false);
+          } else {
+            console.log(
+              "⚠️ Ambiguous auth response, assuming not authenticated"
+            );
+            setIsAuthenticated(false);
+          }
+        }
+      } catch (error) {
+        console.error("🚨 Auth check failed:", error);
+        if (isMounted) {
+          setIsAuthenticated(false);
+        }
+      } finally {
+        if (isMounted) {
+          setAuthLoading(false);
+        }
+      }
+    };
+
+    checkAuthentication();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, []); // ✅ Empty dependency array is correct here
+
+  // ✅ SOLUTION 1: Separate useEffect for handling auth state changes
+  useEffect(() => {
+    if (authLoading) return; // Wait for auth check to complete
+
+    if (isAuthenticated === false) {
+      console.log("🔄 Redirecting to auth page...");
+      const currentPath = window.location.pathname + window.location.search;
+      router.replace(`/auth?returnUrl=${encodeURIComponent(currentPath)}`);
+      return;
+    }
+
+    if (isAuthenticated === true) {
+      console.log("✅ User authenticated, loading dogs...");
+      fetchDogs();
+    }
+  }, [isAuthenticated, authLoading, router, fetchDogs]); // ✅ All dependencies included
+
   // Handle filter changes
-  const handleFilterChange = (newFilters: Partial<SearchFilters>) => {
-    const updatedFilters = { ...filters, ...newFilters };
-    setFilters(updatedFilters);
-    fetchDogs(updatedFilters);
-  };
+  const handleFilterChange = useCallback(
+    (newFilters: Partial<SearchFilters>) => {
+      const updatedFilters = { ...filters, ...newFilters };
+      setFilters(updatedFilters);
+      fetchDogs(updatedFilters);
+    },
+    [filters, fetchDogs]
+  );
 
   // Handle breed filter
-  const toggleBreed = (breed: string) => {
-    const newBreeds = filters.breeds.includes(breed)
-      ? filters.breeds.filter((b) => b !== breed)
-      : [...filters.breeds, breed];
-    handleFilterChange({ breeds: newBreeds });
-  };
+  const toggleBreed = useCallback(
+    (breed: string) => {
+      const newBreeds = filters.breeds.includes(breed)
+        ? filters.breeds.filter((b) => b !== breed)
+        : [...filters.breeds, breed];
+      handleFilterChange({ breeds: newBreeds });
+    },
+    [filters.breeds, handleFilterChange]
+  );
 
   // Handle zip code input
-  const handleZipCodeAdd = (zipCode: string) => {
-    if (zipCode && !filters.zipCodes.includes(zipCode)) {
-      handleFilterChange({ zipCodes: [...filters.zipCodes, zipCode] });
-    }
-  };
+  const handleZipCodeAdd = useCallback(
+    (zipCode: string) => {
+      if (zipCode && !filters.zipCodes.includes(zipCode)) {
+        handleFilterChange({ zipCodes: [...filters.zipCodes, zipCode] });
+      }
+    },
+    [filters.zipCodes, handleFilterChange]
+  );
 
   // Remove zip code
-  const removeZipCode = (zipCode: string) => {
-    handleFilterChange({
-      zipCodes: filters.zipCodes.filter((z) => z !== zipCode),
-    });
-  };
+  const removeZipCode = useCallback(
+    (zipCode: string) => {
+      handleFilterChange({
+        zipCodes: filters.zipCodes.filter((z) => z !== zipCode),
+      });
+    },
+    [filters.zipCodes, handleFilterChange]
+  );
 
   // Clear all filters
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     const clearedFilters: SearchFilters = {
       breeds: [],
       zipCodes: [],
@@ -267,21 +282,24 @@ export default function DogsListingPage() {
     };
     setFilters(clearedFilters);
     fetchDogs(clearedFilters);
-  };
+  }, [fetchDogs]);
 
   // Handle dog selection for matching
-  const toggleDogSelection = (dogId: string) => {
-    const newSelection = new Set(selectedDogs);
-    if (newSelection.has(dogId)) {
-      newSelection.delete(dogId);
-    } else {
-      newSelection.add(dogId);
-    }
-    setSelectedDogs(newSelection);
-  };
+  const toggleDogSelection = useCallback(
+    (dogId: string) => {
+      const newSelection = new Set(selectedDogs);
+      if (newSelection.has(dogId)) {
+        newSelection.delete(dogId);
+      } else {
+        newSelection.add(dogId);
+      }
+      setSelectedDogs(newSelection);
+    },
+    [selectedDogs]
+  );
 
   // Find match
-  const findMatch = async () => {
+  const findMatch = useCallback(async () => {
     if (selectedDogs.size === 0) return;
 
     setMatchLoading(true);
@@ -300,7 +318,6 @@ export default function DogsListingPage() {
       if (response.status === 401 || response.status === 403) {
         console.log("🚨 Auth expired during match, redirecting...");
         setIsAuthenticated(false);
-        router.replace("/auth");
         return;
       }
 
@@ -320,26 +337,26 @@ export default function DogsListingPage() {
     } finally {
       setMatchLoading(false);
     }
-  };
+  }, [selectedDogs, dogs]);
 
   // Pagination handlers
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (searchResults?.next) {
       const params = new URLSearchParams(searchResults.next.split("?")[1]);
       const from = params.get("from");
       if (from) fetchDogs(filters, from);
     }
-  };
+  }, [searchResults, filters, fetchDogs]);
 
-  const handlePrevPage = () => {
+  const handlePrevPage = useCallback(() => {
     if (searchResults?.prev) {
       const params = new URLSearchParams(searchResults.prev.split("?")[1]);
       const from = params.get("from");
       fetchDogs(filters, from || undefined);
     }
-  };
+  }, [searchResults, filters, fetchDogs]);
 
-  // ✅ LOADING STATE - Show loading while checking auth
+  // ✅ Loading state while checking auth
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -351,7 +368,7 @@ export default function DogsListingPage() {
     );
   }
 
-  // ✅ AUTH FAILED STATE - This shouldn't render since we redirect, but good fallback
+  // ✅ Auth failed state (shouldn't render since we redirect, but good fallback)
   if (isAuthenticated === false) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -366,7 +383,7 @@ export default function DogsListingPage() {
     );
   }
 
-  // ✅ AUTHENTICATED - Show the full dogs listing page
+  // ✅ Main component render
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -676,14 +693,23 @@ export default function DogsListingPage() {
                     viewMode === "list" ? "w-48 flex-shrink-0" : "h-64"
                   }`}
                 >
-                  <img
+                  <Image
                     src={dog.img}
-                    alt={dog.name}
-                    className="w-full h-full object-cover"
+                    alt={`${dog.name} - ${dog.breed} available for adoption`}
+                    fill
+                    className="object-cover"
+                    sizes={
+                      viewMode === "list"
+                        ? "192px"
+                        : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                    }
+                    priority={false}
+                    placeholder="blur"
+                    blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
                   />
                   <button
                     onClick={() => toggleDogSelection(dog.id)}
-                    className={`absolute top-3 right-3 p-2 rounded-full transition-colors ${
+                    className={`absolute top-3 right-3 p-2 rounded-full transition-colors z-10 ${
                       selectedDogs.has(dog.id)
                         ? "bg-pink-600 text-white"
                         : "bg-white/80 text-gray-600 hover:bg-pink-100"

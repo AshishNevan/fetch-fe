@@ -60,7 +60,9 @@ export default function HowItWorks() {
           {steps.map((step, index) => (
             <div
               key={index}
-              ref={(el) => (stepsRef.current[index] = el)}
+              ref={(el) => {
+                stepsRef.current[index] = el;
+              }}
               className="step"
             >
               <div className="step-icon">{step.icon}</div>

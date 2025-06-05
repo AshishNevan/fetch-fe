@@ -1,7 +1,6 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { isAuthenticated } from "../lib/utils";
 
 export default function Hero() {
   const router = useRouter();
@@ -39,8 +38,7 @@ export default function Hero() {
 
   const handleStartJourney = async (): Promise<void> => {
     // optimisitic navigation to search page
-    (await isAuthenticated()) ? router.push("/search") : router.push("/auth");
-    // router.push("/search");
+    router.push("/search");
   };
 
   return (
