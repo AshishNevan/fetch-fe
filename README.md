@@ -4,7 +4,7 @@ A modern, full-stack web application that gamifies the dog adoption process with
 
 ## 🌟 **Live Demo**
 
-DEPLOYMENT LINK
+[https://fetch-fe-pied.vercel.app/](https://fetch-fe-pied.vercel.app/)
 
 ## 🎯 **Project Overview**
 
